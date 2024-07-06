@@ -45,6 +45,12 @@ class FilesController {
     fileDocument.localPath = filePath;
     const result = await dbClient.db.collection('files').insertOne(fileDocument);
     res.status(201).json({ id: result.insertedId, ...fileDocument });
+
+    if (file.type.startsWith('image/')) {
+      fileQueue.add({ userId, fileId: file._id });
+    }
+
+    return res.status(201).json(file);
   }
 
   static async getIndex(req, res) {
@@ -147,6 +153,7 @@ class FilesController {
 
   static async getFile(req, res) {
     const fileId = req.params.id;
+    const size = req.query.size;
 
     const file = await dbClient.db.collection('files').findOne({ _id: ObjectId(fileId) });
     if (!file) return res.status(404).json({ error: 'Not found' });
@@ -163,14 +170,19 @@ class FilesController {
       return res.status(400).json({ error: "A folder doesn't have content" });
     }
 
-    if (!fs.existsSync(file.localPath)) {
+    let filePath = file.localPath;
+    if (size) {
+      filePath = `${filePath}_${size}`;
+    }
+
+    if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'Not found' });
     }
 
     const mimeType = mime.lookup(file.name);
     res.setHeader('Content-Type', mimeType);
 
-    const fileContent = fs.readFileSync(file.localPath);
+    const fileContent = fs.readFileSync(filePath);
     res.status(200).send(fileContent);
   }
 
